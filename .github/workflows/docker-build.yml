@@ -25,6 +25,6 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/blk-hacking-ind-abhijit-dutta
+          IMAGE_NAME=ghcr.io/abhijitdutta338/blk-hacking-ind-abhijit-dutta
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
