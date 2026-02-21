@@ -3,6 +3,11 @@
 A production-ready Python Flask application for automated retirement savings through expense-based micro-investments
 
 ---
+## Youtube Video:
+
+Please do give it a watch :) 
+https://www.youtube.com/watch?v=uZNqcDSS58E
+---
 
 ## Table of Contents
 
