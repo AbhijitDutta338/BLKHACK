@@ -1,0 +1,4 @@
+BASE_URL = "http://localhost:5477/blackrock/challenge/v1"
+RETIREMENT_AGE_DEFAULT = 60
+EXPECTED_RETURN_INDEX = 0.12
+EXPECTED_RETURN_NPS = 0.08
