@@ -4,8 +4,8 @@ A production-ready Python Flask application for automated retirement savings thr
 
 ---
 ## Youtube Video:
-
 Please do give it a watch :) 
+
 https://www.youtube.com/watch?v=uZNqcDSS58E
 ---
 
@@ -22,9 +22,6 @@ https://www.youtube.com/watch?v=uZNqcDSS58E
   - [POST /returns:nps](#4-post-returnsnps)
   - [POST /returns:index](#5-post-returnsindex)
   - [GET /performance](#6-get-performance)
-- [Business Logic](#business-logic)
-- [Error Codes](#error-codes)
-
 ---
 
 ## Project Structure
