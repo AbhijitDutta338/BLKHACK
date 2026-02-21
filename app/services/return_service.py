@@ -8,52 +8,124 @@ Implements compound-growth projections for two investment vehicles:
 
 Pipeline per call
 -----------------
-1. Enrich raw transactions (ceiling / remanent).
-2. Apply temporal constraints (Q → P → K).
-3. For each K period:
-   a. Sum *remanent* of valid transactions in that period.
-   b. Compute future value after compound growth.
-   c. Deflate by inflation to get real value.
-   d. Report profits = real_value - principal.
-   e. NPS only: compute tax deduction benefit.
+1. Inline validation: reject negative amounts and duplicate timestamps.
+2. Compute ceiling / remanent for every accepted transaction.
+3. Track totalTransactionAmount and totalCeiling across ALL accepted transactions.
+4. Apply Q rules (latest-start override).
+5. Apply P rules (additive extras).
+6. For each K period: sum remanent of transactions whose date falls in K
+   (zero-remanent rows contribute 0 – accepted but not invested).
+7. Compound-grow each K-bucket sum, deflate by inflation, compute tax benefit.
+
+Assumptions
+-----------
+* ``annual_wage`` received here is the **annual** wage (caller multiplies monthly × 12).
+* ``inflation`` received here is a **decimal** rate (caller divides % by 100).
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List
+from typing import Any, Dict, List, NamedTuple, Set
 
 from app.models.schemas import (
     KRange,
     PRule,
     QRule,
-    RawExpense,
     ReturnsResult,
     SavingsByDate,
-    Transaction,
 )
-from app.services.temporal_service import apply_temporal_filter
-from app.services.transaction_service import build_transactions
+from app.services.temporal_service import _apply_p_rules, _best_q_rule
 from app.utils.financial import (
     INDEX_ANNUAL_RATE,
     NPS_ANNUAL_RATE,
     ZERO,
     compound_grow,
+    compute_ceiling,
     compute_nps_deduction,
+    compute_remanent,
     compute_tax_benefit,
     inflation_adjusted,
     resolve_investment_years,
     to_decimal,
 )
-from app.utils.time_utils import is_within_range
+from app.utils.time_utils import format_timestamp, is_within_range, parse_timestamp
+
+
+# ── Internal DTO ──────────────────────────────────────────────────────────────
+
+class _EnrichedTxn(NamedTuple):
+    """Internal representation of a single processed transaction."""
+    date: object          # datetime
+    amount: Decimal
+    ceiling: Decimal
+    remanent: Decimal     # after Q/P rules
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _sum_remanent_in_k(transactions: List[Transaction], k: KRange) -> Decimal:
-    """Sum the *remanent* of all transactions whose date falls in K."""
+def _process_raw_transactions(
+    raw_transactions: List[Dict[str, Any]],
+    q_rules: List[QRule],
+    p_rules: List[PRule],
+) -> tuple[List[_EnrichedTxn], Decimal, Decimal]:
+    """
+    Validate, enrich, and apply temporal rules to raw transactions.
+
+    Returns
+    -------
+    tuple
+        ``(enriched_list, total_amount, total_ceiling)``
+        *enriched_list* contains only accepted transactions (negatives and
+        duplicates removed) with Q/P rules already applied.
+        *total_amount* and *total_ceiling* cover all accepted transactions
+        regardless of whether their final remanent is zero.
+    """
+    enriched: List[_EnrichedTxn] = []
+    total_amount = ZERO
+    total_ceiling = ZERO
+    seen: Set[str] = set()
+
+    for raw in raw_transactions:
+        date_str: str = raw["date"]
+        amount: Decimal = to_decimal(raw["amount"])
+        dt = parse_timestamp(date_str)
+        norm = format_timestamp(dt)
+
+        # Reject negatives silently
+        if amount < ZERO:
+            continue
+
+        # Reject duplicates – first occurrence wins
+        if norm in seen:
+            continue
+        seen.add(norm)
+
+        # Compute ceiling / remanent
+        ceiling = compute_ceiling(amount)
+        remanent = compute_remanent(ceiling, amount)
+
+        # Track totals BEFORE Q/P adjustment
+        total_amount += amount
+        total_ceiling += ceiling
+
+        # Apply Q rule (latest-start override)
+        best_q = _best_q_rule(dt, q_rules)
+        if best_q is not None:
+            remanent = best_q.fixed
+
+        # Apply P rules (additive)
+        remanent = _apply_p_rules(remanent, dt, p_rules)
+
+        enriched.append(_EnrichedTxn(date=dt, amount=amount, ceiling=ceiling, remanent=remanent))
+
+    return enriched, total_amount, total_ceiling
+
+
+def _sum_remanent_in_k(txns: List[_EnrichedTxn], k: KRange) -> Decimal:
+    """Sum remanent for transactions whose date falls inside K (inclusive)."""
     return sum(
-        (t.remanent for t in transactions if is_within_range(t.date, k.start, k.end)),
+        (t.remanent for t in txns if is_within_range(t.date, k.start, k.end)),
         ZERO,
     )
 
@@ -64,43 +136,28 @@ def _compute_savings(
     rate: Decimal,
     years: int,
     inflation: Decimal,
-    wage: Decimal,
+    annual_wage: Decimal,
     include_tax_benefit: bool,
 ) -> SavingsByDate:
     """
-    Compute one :class:`~app.models.schemas.SavingsByDate` entry.
+    Build one :class:`~app.models.schemas.SavingsByDate` entry.
 
-    Parameters
-    ----------
-    k:
-        The K range this bucket belongs to.
-    invested:
-        Sum of remanent amounts within *k*.
-    rate:
-        Annual compound rate (7.11 % for NPS, 14.49 % for Index).
-    years:
-        Investment horizon.
-    inflation:
-        Annual inflation rate (decimal, e.g. 0.06 for 6 %).
-    wage:
-        Gross annual salary (used only for NPS tax benefit).
-    include_tax_benefit:
-        ``True`` for NPS, ``False`` for Index.
+    profit = inflation_adjusted(future_value) − principal
     """
     future_value = compound_grow(invested, rate, years)
     real_value = inflation_adjusted(future_value, inflation, years)
-    profits = real_value - invested
+    profit = real_value - invested
 
     tax_benefit = ZERO
     if include_tax_benefit and invested > ZERO:
-        deduction = compute_nps_deduction(invested, wage)
-        tax_benefit = compute_tax_benefit(wage, deduction)
+        deduction = compute_nps_deduction(invested, annual_wage)
+        tax_benefit = compute_tax_benefit(annual_wage, deduction)
 
     return SavingsByDate(
-        start=k.start,
-        end=k.end,
+        start=k.raw_start,
+        end=k.raw_end,
         amount=invested,
-        profits=profits,
+        profit=profit,
         tax_benefit=tax_benefit,
     )
 
@@ -109,12 +166,12 @@ def _compute_savings(
 
 def calculate_returns(
     age: int,
-    wage: Decimal,
+    annual_wage: Decimal,
     inflation: Decimal,
     q_rules: List[QRule],
     p_rules: List[PRule],
     k_ranges: List[KRange],
-    expenses: List[RawExpense],
+    raw_transactions: List[Dict[str, Any]],
     include_tax_benefit: bool,
 ) -> ReturnsResult:
     """
@@ -124,55 +181,49 @@ def calculate_returns(
     ----------
     age:
         Current age of the investor.
-    wage:
-        Gross annual salary.
+    annual_wage:
+        **Annual** gross salary (monthly value already multiplied by 12 by caller).
     inflation:
-        Annual inflation rate as a decimal (e.g. ``Decimal("0.06")``).
+        Annual inflation rate as a **decimal** (e.g. ``Decimal("0.055")`` for 5.5 %).
     q_rules, p_rules, k_ranges:
         Temporal constraint definitions.
-    expenses:
-        Raw expense list (timestamp + amount).
+    raw_transactions:
+        List of ``{"date": str, "amount": number}`` dicts.  Negative amounts
+        and duplicate timestamps are silently rejected.
     include_tax_benefit:
-        ``True`` → NPS rate + tax benefit; ``False`` → Index rate, benefit = 0.
+        ``True`` → NPS rate (7.11 %) + tax benefit.
+        ``False`` → Index rate (14.49 %), tax benefit = 0.
 
     Returns
     -------
     ReturnsResult
-        Aggregate totals and per-K-range savings projections.
+        Aggregate totals and per-K savings projections.
     """
-    # Step 1 – enrich
-    parse_result = build_transactions(expenses)
-
-    # Step 2 – temporal filter
-    temporal_result = apply_temporal_filter(
-        q_rules=q_rules,
-        p_rules=p_rules,
-        k_ranges=k_ranges,
-        transactions=parse_result.transactions,
+    # Steps 1–5: validate, enrich, Q/P rules
+    enriched, total_amount, total_ceiling = _process_raw_transactions(
+        raw_transactions, q_rules, p_rules
     )
-    valid_txns = temporal_result.valid
 
-    # Step 3 – investment parameters
     rate = NPS_ANNUAL_RATE if include_tax_benefit else INDEX_ANNUAL_RATE
     years = resolve_investment_years(age)
 
-    # Step 4 – per-K bucket
+    # Steps 6–7: per-K compound growth
     savings_by_dates: List[SavingsByDate] = []
     for k in k_ranges:
-        invested = _sum_remanent_in_k(valid_txns, k)
+        invested = _sum_remanent_in_k(enriched, k)
         entry = _compute_savings(
             k=k,
             invested=invested,
             rate=rate,
             years=years,
             inflation=inflation,
-            wage=wage,
+            annual_wage=annual_wage,
             include_tax_benefit=include_tax_benefit,
         )
         savings_by_dates.append(entry)
 
     return ReturnsResult(
-        transactions_total_amount=parse_result.total_expense,
-        transactions_total_ceiling=parse_result.total_ceiling,
+        total_transaction_amount=total_amount,
+        total_ceiling=total_ceiling,
         savings_by_dates=savings_by_dates,
     )

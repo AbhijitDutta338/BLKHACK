@@ -16,10 +16,10 @@ from typing import Any, Dict, List
 
 from flask import Blueprint, Response, jsonify, request
 
-from app.models.schemas import KRange, PRule, QRule, RawExpense
+from app.models.schemas import KRange, PRule, QRule
 from app.services.return_service import calculate_returns
 from app.utils.financial import to_decimal
-from app.utils.time_utils import parse_timestamp
+from app.utils.time_utils import parse_timestamp, parse_timestamp_lenient
 
 returns_bp = Blueprint("returns", __name__)
 
@@ -27,16 +27,6 @@ BASE = "/blackrock/challenge/v1"
 
 
 # ── Shared parsing helpers ────────────────────────────────────────────────────
-
-def _parse_expense(raw: Dict[str, Any]) -> RawExpense:
-    for key in ("timestamp", "amount"):
-        if key not in raw:
-            raise ValueError(f"Expense missing field: {key!r}")
-    return RawExpense(
-        timestamp=raw["timestamp"],
-        amount=to_decimal(raw["amount"]),
-    )
-
 
 def _parse_q_rule(raw: Dict[str, Any]) -> QRule:
     for key in ("fixed", "start", "end"):
@@ -64,9 +54,13 @@ def _parse_k_range(raw: Dict[str, Any]) -> KRange:
     for key in ("start", "end"):
         if key not in raw:
             raise ValueError(f"K range missing field: {key!r}")
+    raw_start: str = raw["start"]
+    raw_end: str = raw["end"]
     return KRange(
-        start=parse_timestamp(raw["start"]),
-        end=parse_timestamp(raw["end"]),
+        start=parse_timestamp_lenient(raw_start),
+        end=parse_timestamp_lenient(raw_end),
+        raw_start=raw_start,
+        raw_end=raw_end,
     )
 
 
@@ -84,11 +78,14 @@ def _parse_returns_body(body: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(age, int) or isinstance(age, bool):
         raise ValueError(f"'age' must be an integer, got {type(age).__name__}.")
 
-    wage = to_decimal(body["wage"])
-    if wage <= 0:
+    # wage is monthly → convert to annual
+    monthly_wage = to_decimal(body["wage"])
+    if monthly_wage <= 0:
         raise ValueError("'wage' must be a positive number.")
+    annual_wage = monthly_wage * 12
 
-    inflation = to_decimal(body["inflation"])
+    # inflation is a percentage (e.g. 5.5) → convert to decimal (0.055)
+    inflation = to_decimal(body["inflation"]) / 100
 
     q_rules: List[QRule] = [_parse_q_rule(r) for r in body.get("q", [])]
     p_rules: List[PRule] = [_parse_p_rule(r) for r in body.get("p", [])]
@@ -101,16 +98,23 @@ def _parse_returns_body(body: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(transactions_raw, list):
         raise ValueError("'transactions' must be a list.")
 
-    expenses = [_parse_expense(t) for t in transactions_raw]
+    # Validate each entry has date + amount
+    raw_list: List[Dict[str, Any]] = []
+    for i, t in enumerate(transactions_raw):
+        if "date" not in t:
+            raise ValueError(f"Transaction #{i}: missing 'date' field.")
+        if "amount" not in t:
+            raise ValueError(f"Transaction #{i}: missing 'amount' field.")
+        raw_list.append({"date": str(t["date"]), "amount": t["amount"]})
 
     return {
         "age": age,
-        "wage": wage,
+        "annual_wage": annual_wage,
         "inflation": inflation,
         "q_rules": q_rules,
         "p_rules": p_rules,
         "k_ranges": k_ranges,
-        "expenses": expenses,
+        "raw_transactions": raw_list,
     }
 
 

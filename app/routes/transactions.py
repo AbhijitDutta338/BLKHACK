@@ -27,7 +27,7 @@ from app.models.schemas import (
     RawExpense,
     Transaction,
 )
-from app.services.temporal_service import apply_temporal_filter
+from app.services.temporal_service import apply_temporal_filter, apply_temporal_filter_raw
 from app.services.transaction_service import build_transactions
 from app.services.validation_service import validate_transactions
 from app.utils.financial import to_decimal
@@ -179,7 +179,11 @@ def validator_transactions() -> tuple[Response, int]:
 @transactions_bp.route(f"{BASE}/transactions:filter", methods=["POST"])
 def filter_transactions() -> tuple[Response, int]:
     """
-    Apply Q / P / K temporal constraints to transactions.
+    Apply Q / P / K temporal constraints to raw transactions.
+
+    Transactions are accepted as ``{"date": "YYYY-MM-DD HH:mm:ss", "amount": number}``.
+    Ceiling and remanent are computed internally.  Inline validation rejects
+    negative amounts and duplicate timestamps before temporal rules are applied.
 
     Expects JSON body::
 
@@ -187,7 +191,11 @@ def filter_transactions() -> tuple[Response, int]:
             "q": [{"fixed": number, "start": "...", "end": "..."}],
             "p": [{"extra": number, "start": "...", "end": "..."}],
             "k": [{"start": "...", "end": "..."}],
-            "transactions": [...]
+            "transactions": [
+                {"date": "YYYY-MM-DD HH:mm:ss", "amount": number},
+                ...
+            ],
+            "wage": number  (optional)
         }
     """
     body: Dict[str, Any] | None = request.get_json(silent=True)
@@ -201,19 +209,26 @@ def filter_transactions() -> tuple[Response, int]:
     except (ValueError, TypeError, KeyError) as exc:
         return jsonify({"error": str(exc)}), 422
 
+    if not k_ranges:
+        return jsonify({"error": "At least one K range is required."}), 422
+
     transactions_raw = body.get("transactions")
     if not isinstance(transactions_raw, list):
         return jsonify({"error": "'transactions' must be a list."}), 422
 
+    # Validate each entry has the required minimal fields
     try:
-        transactions = [_parse_transaction_dict(t) for t in transactions_raw]
-    except (ValueError, TypeError, KeyError) as exc:
+        raw_list: List[Dict[str, Any]] = []
+        for i, t in enumerate(transactions_raw):
+            if "date" not in t:
+                raise ValueError(f"Transaction #{i}: missing 'date' field.")
+            if "amount" not in t:
+                raise ValueError(f"Transaction #{i}: missing 'amount' field.")
+            raw_list.append({"date": str(t["date"]), "amount": t["amount"]})
+    except (ValueError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 422
 
-    if not k_ranges:
-        return jsonify({"error": "At least one K range is required."}), 422
-
-    result = apply_temporal_filter(q_rules, p_rules, k_ranges, transactions)
+    result = apply_temporal_filter_raw(q_rules, p_rules, k_ranges, raw_list)
     return jsonify(result.to_dict()), 200
 
 

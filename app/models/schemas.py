@@ -125,15 +125,76 @@ class KRange:
     """Validity window; transaction must fall in at least one K range."""
     start: datetime
     end: datetime
+    raw_start: str = ""
+    raw_end: str = ""
 
 
 # ── Temporal filter output ────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class TemporalResult:
-    """Output of the temporal constraints filter service."""
+    """Output of the temporal constraints filter service (pre-built transactions)."""
     valid: List[Transaction]
     invalid: List[InvalidTransaction]
+
+    def to_dict(self) -> dict:
+        return {
+            "valid": [t.to_dict() for t in self.valid],
+            "invalid": [t.to_dict() for t in self.invalid],
+        }
+
+
+@dataclass(frozen=True)
+class FilteredTransaction:
+    """
+    Valid transaction produced by the raw-input temporal filter.
+    Includes ``inKPeriod`` flag and fully computed ceiling/remanent.
+    """
+    date: datetime
+    amount: Decimal
+    ceiling: Decimal
+    remanent: Decimal
+    in_k_period: bool = True
+
+    def to_dict(self) -> dict:
+        from app.utils.time_utils import format_timestamp
+        from app.utils.financial import decimal_to_float
+        return {
+            "date": format_timestamp(self.date),
+            "amount": decimal_to_float(self.amount),
+            "ceiling": decimal_to_float(self.ceiling),
+            "remanent": decimal_to_float(self.remanent),
+            "inKPeriod": self.in_k_period,
+        }
+
+
+@dataclass(frozen=True)
+class InvalidFilteredTransaction:
+    """
+    A transaction rejected during raw-input temporal filtering.
+    Only carries date, amount and a human-readable message.
+    """
+    date: datetime
+    amount: Decimal
+    message: str
+
+    def to_dict(self) -> dict:
+        from app.utils.time_utils import format_timestamp
+        from app.utils.financial import decimal_to_float
+        return {
+            "date": format_timestamp(self.date),
+            "amount": decimal_to_float(self.amount),
+            "message": self.message,
+        }
+
+
+@dataclass(frozen=True)
+class FilterResult:
+    """
+    Output of the raw-input temporal filter pipeline.
+    """
+    valid: List[FilteredTransaction]
+    invalid: List[InvalidFilteredTransaction]
 
     def to_dict(self) -> dict:
         return {
@@ -146,21 +207,25 @@ class TemporalResult:
 
 @dataclass(frozen=True)
 class SavingsByDate:
-    """Compounded return figure for one K period."""
-    start: datetime
-    end: datetime
+    """
+    Compounded return figure for one K period.
+
+    ``start`` and ``end`` are stored as the **original input strings** so that
+    calendar oddities like ``"2023-11-31"`` are echoed back verbatim.
+    """
+    start: str
+    end: str
     amount: Decimal
-    profits: Decimal
+    profit: Decimal
     tax_benefit: Decimal
 
     def to_dict(self) -> dict:
-        from app.utils.time_utils import format_timestamp
         from app.utils.financial import decimal_to_float
         return {
-            "start": format_timestamp(self.start),
-            "end": format_timestamp(self.end),
+            "start": self.start,
+            "end": self.end,
             "amount": decimal_to_float(self.amount),
-            "profits": decimal_to_float(self.profits),
+            "profit": decimal_to_float(self.profit),
             "taxBenefit": decimal_to_float(self.tax_benefit),
         }
 
@@ -168,14 +233,14 @@ class SavingsByDate:
 @dataclass(frozen=True)
 class ReturnsResult:
     """Output of both NPS and Index returns services."""
-    transactions_total_amount: Decimal
-    transactions_total_ceiling: Decimal
+    total_transaction_amount: Decimal
+    total_ceiling: Decimal
     savings_by_dates: List[SavingsByDate]
 
     def to_dict(self) -> dict:
         from app.utils.financial import decimal_to_float
         return {
-            "transactionsTotalAmount": decimal_to_float(self.transactions_total_amount),
-            "transactionsTotalCeiling": decimal_to_float(self.transactions_total_ceiling),
+            "totalTransactionAmount": decimal_to_float(self.total_transaction_amount),
+            "totalCeiling": decimal_to_float(self.total_ceiling),
             "savingsByDates": [s.to_dict() for s in self.savings_by_dates],
         }
