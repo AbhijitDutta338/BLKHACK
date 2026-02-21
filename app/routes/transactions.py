@@ -93,30 +93,15 @@ def _parse_k_range(raw: Dict[str, Any]) -> KRange:
 
 @transactions_bp.route(f"{BASE}/transactions:parse", methods=["POST"])
 def parse_transactions() -> tuple[Response, int]:
-    """
-    Build enriched transactions from raw expense input.
 
-    Expects JSON body::
-
-        {
-            "expenses": [
-                {"timestamp": "YYYY-MM-DD HH:mm:ss", "amount": number},
-                ...
-            ]
-        }
-    """
-    body: Dict[str, Any] | None = request.get_json(silent=True)
-    if body is None:
-        return jsonify({"error": "Invalid or missing JSON body."}), 400
-
-    expenses_raw = body.get("expenses")
+    expenses_raw = request.get_json(silent=True)
     if not isinstance(expenses_raw, list):
         return jsonify({"error": "'expenses' must be a list."}), 422
 
     try:
         expenses = [
             RawExpense(
-                timestamp=_require_str(e, "timestamp"),
+                timestamp=_require_str(e, "date"),
                 amount=to_decimal(_require_field(e, "amount")),
             )
             for e in expenses_raw

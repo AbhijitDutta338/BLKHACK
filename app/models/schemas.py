@@ -13,8 +13,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 
-# ── Raw input atoms ──────────────────────────────────────────────────────────
-
+#Raw input atoms
 @dataclass(frozen=True)
 class RawExpense:
     """Single raw expense row as received from the client."""
@@ -34,8 +33,7 @@ class RawTransaction:
     remanent: Decimal
 
 
-# ── Enriched transaction (output of builder) ─────────────────────────────────
-
+#Enriched transaction (output of builder) 
 @dataclass(frozen=True)
 class Transaction:
     """Fully enriched transaction with ceiling and remanent."""
@@ -55,8 +53,7 @@ class Transaction:
         }
 
 
-# ── Parser output ─────────────────────────────────────────────────────────────
-
+#Parser output 
 @dataclass(frozen=True)
 class ParseResult:
     """Output of the transaction builder service."""
@@ -67,16 +64,10 @@ class ParseResult:
 
     def to_dict(self) -> dict:
         from app.utils.financial import decimal_to_float
-        return {
-            "transactions": [t.to_dict() for t in self.transactions],
-            "totalExpense": decimal_to_float(self.total_expense),
-            "totalCeiling": decimal_to_float(self.total_ceiling),
-            "totalRemanent": decimal_to_float(self.total_remanent),
-        }
+        return [t.to_dict() for t in self.transactions]
 
 
-# ── Validation output ─────────────────────────────────────────────────────────
-
+#Validation output 
 @dataclass(frozen=True)
 class InvalidTransaction:
     """A transaction that failed one or more validation rules."""
@@ -102,8 +93,7 @@ class ValidationResult:
         }
 
 
-# ── Temporal rule definitions ─────────────────────────────────────────────────
-
+#Temporal rule definitions 
 @dataclass(frozen=True)
 class QRule:
     """Replace *remanent* with *fixed* for transactions in [start, end]."""
@@ -129,8 +119,7 @@ class KRange:
     raw_end: str = ""
 
 
-# ── Temporal filter output ────────────────────────────────────────────────────
-
+#Temporal filter output
 @dataclass(frozen=True)
 class TemporalResult:
     """Output of the temporal constraints filter service (pre-built transactions)."""
@@ -203,8 +192,7 @@ class FilterResult:
         }
 
 
-# ── Returns output ────────────────────────────────────────────────────────────
-
+#Returns output schemas
 @dataclass(frozen=True)
 class SavingsByDate:
     """
