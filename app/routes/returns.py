@@ -1,15 +1,3 @@
-"""
-Returns calculation routes.
-
-Endpoints
----------
-POST /blackrock/challenge/v1/returns:nps
-    Compound-growth projection using NPS rate (7.11 %) + tax benefit.
-
-POST /blackrock/challenge/v1/returns:index
-    Compound-growth projection using Index fund rate (14.49 %).
-"""
-
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -26,8 +14,7 @@ returns_bp = Blueprint("returns", __name__)
 BASE = "/blackrock/challenge/v1"
 
 
-# ── Shared parsing helpers ────────────────────────────────────────────────────
-
+#Shared parsing helpers
 def _parse_q_rule(raw: Dict[str, Any]) -> QRule:
     for key in ("fixed", "start", "end"):
         if key not in raw:
@@ -65,11 +52,7 @@ def _parse_k_range(raw: Dict[str, Any]) -> KRange:
 
 
 def _parse_returns_body(body: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Extract and validate all common fields from a returns request body.
 
-    Returns a dict with parsed, typed values.
-    """
     for key in ("age", "wage", "inflation", "transactions", "k"):
         if key not in body:
             raise ValueError(f"Missing required field: {key!r}")
@@ -118,28 +101,10 @@ def _parse_returns_body(body: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-# ── Endpoint: NPS returns ─────────────────────────────────────────────────────
-
+#Endpoint: NPS returns
 @returns_bp.route(f"{BASE}/returns:nps", methods=["POST"])
 def returns_nps() -> tuple[Response, int]:
-    """
-    Compute NPS compound-growth returns with tax benefit.
-
-    Uses an annual rate of **7.11 %**.
-    Tax benefit = ``tax(wage) - tax(wage - deduction)`` per K bucket.
-
-    Expects JSON body::
-
-        {
-            "age": integer,
-            "wage": number,
-            "inflation": number,
-            "q": [...],
-            "p": [...],
-            "k": [...],
-            "transactions": [{"timestamp": "...", "amount": number}]
-        }
-    """
+    
     body: Dict[str, Any] | None = request.get_json(silent=True)
     if body is None:
         return jsonify({"error": "Invalid or missing JSON body."}), 400
@@ -157,17 +122,10 @@ def returns_nps() -> tuple[Response, int]:
     return jsonify(result.to_dict()), 200
 
 
-# ── Endpoint: Index returns ───────────────────────────────────────────────────
-
+#Endpoint: Index returns
 @returns_bp.route(f"{BASE}/returns:index", methods=["POST"])
 def returns_index() -> tuple[Response, int]:
-    """
-    Compute Index fund compound-growth returns (no tax benefit).
-
-    Uses an annual rate of **14.49 %**.
-
-    Expects the same JSON body structure as ``/returns:nps``.
-    """
+    
     body: Dict[str, Any] | None = request.get_json(silent=True)
     if body is None:
         return jsonify({"error": "Invalid or missing JSON body."}), 400

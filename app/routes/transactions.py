@@ -1,18 +1,3 @@
-"""
-Transaction routes.
-
-Endpoints
----------
-POST /blackrock/challenge/v1/transactions:parse
-    Build enriched transaction list from raw expenses.
-
-POST /blackrock/challenge/v1/transactions:validator
-    Validate enriched transactions against business rules.
-
-POST /blackrock/challenge/v1/transactions:filter
-    Apply temporal (Q / P / K) constraints to transactions.
-"""
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -38,13 +23,8 @@ transactions_bp = Blueprint("transactions", __name__)
 BASE = "/blackrock/challenge/v1"
 
 
-# ── Shared parsing helpers ────────────────────────────────────────────────────
-
+#Shared parsing helpers
 def _parse_transaction_dict(raw: Dict[str, Any]) -> Transaction:
-    """
-    Parse a dict with keys ``date``, ``amount``, ``ceiling``, ``remanent``
-    into a :class:`~app.models.schemas.Transaction`.
-    """
     required = ("date", "amount", "ceiling", "remanent")
     for key in required:
         if key not in raw:
@@ -89,8 +69,7 @@ def _parse_k_range(raw: Dict[str, Any]) -> KRange:
     )
 
 
-# ── Endpoint: parse ───────────────────────────────────────────────────────────
-
+#Endpoint: parse 
 @transactions_bp.route(f"{BASE}/transactions:parse", methods=["POST"])
 def parse_transactions() -> tuple[Response, int]:
 
@@ -117,23 +96,10 @@ def parse_transactions() -> tuple[Response, int]:
     return jsonify(result.to_dict()), 200
 
 
-# ── Endpoint: validator ───────────────────────────────────────────────────────
-
+#Endpoint: validator
 @transactions_bp.route(f"{BASE}/transactions:validator", methods=["POST"])
 def validator_transactions() -> tuple[Response, int]:
-    """
-    Validate enriched transactions against all business rules.
-
-    Expects JSON body::
-
-        {
-            "wage": number,
-            "transactions": [
-                {"date": "...", "amount": ..., "ceiling": ..., "remanent": ...},
-                ...
-            ]
-        }
-    """
+    
     body: Dict[str, Any] | None = request.get_json(silent=True)
     if body is None:
         return jsonify({"error": "Invalid or missing JSON body."}), 400
@@ -159,30 +125,9 @@ def validator_transactions() -> tuple[Response, int]:
     return jsonify(result.to_dict()), 200
 
 
-# ── Endpoint: filter (temporal constraints) ───────────────────────────────────
-
+#Endpoint: filter (temporal constraints) 
 @transactions_bp.route(f"{BASE}/transactions:filter", methods=["POST"])
 def filter_transactions() -> tuple[Response, int]:
-    """
-    Apply Q / P / K temporal constraints to raw transactions.
-
-    Transactions are accepted as ``{"date": "YYYY-MM-DD HH:mm:ss", "amount": number}``.
-    Ceiling and remanent are computed internally.  Inline validation rejects
-    negative amounts and duplicate timestamps before temporal rules are applied.
-
-    Expects JSON body::
-
-        {
-            "q": [{"fixed": number, "start": "...", "end": "..."}],
-            "p": [{"extra": number, "start": "...", "end": "..."}],
-            "k": [{"start": "...", "end": "..."}],
-            "transactions": [
-                {"date": "YYYY-MM-DD HH:mm:ss", "amount": number},
-                ...
-            ],
-            "wage": number  (optional)
-        }
-    """
     body: Dict[str, Any] | None = request.get_json(silent=True)
     if body is None:
         return jsonify({"error": "Invalid or missing JSON body."}), 400
@@ -217,8 +162,7 @@ def filter_transactions() -> tuple[Response, int]:
     return jsonify(result.to_dict()), 200
 
 
-# ── Internal field-access helpers ─────────────────────────────────────────────
-
+#Internal field-access helpers 
 def _require_field(obj: Dict[str, Any], key: str) -> Any:
     if key not in obj:
         raise KeyError(f"Missing required field: {key!r}")

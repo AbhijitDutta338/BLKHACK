@@ -1,20 +1,3 @@
-"""
-Transaction validator service.
-
-Responsibility: apply all business-rule validations to an enriched
-transaction list and partition results into *valid* / *invalid* buckets.
-
-Rules (applied in order):
-1. Date format must be valid.
-2. ``remanent`` >= 0.
-3. ``ceiling`` >= ``amount``.
-4. No duplicate timestamps.
-5. Annual NPS investable limit:
-   ``maxInvestable = min(10 % × wage, 200 000)``
-   Once cumulative ``remanent`` exceeds *maxInvestable* the offending
-   (and all subsequent) transactions are marked invalid.
-"""
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -29,21 +12,6 @@ def validate_transactions(
     wage: Decimal,
     transactions: List[Transaction],
 ) -> ValidationResult:
-    """
-    Apply all validation rules and return a :class:`~app.models.schemas.ValidationResult`.
-
-    Parameters
-    ----------
-    wage:
-        Gross annual income (must be positive).
-    transactions:
-        Enriched transaction records (ceiling + remanent already set).
-
-    Returns
-    -------
-    ValidationResult
-        Partitioned *valid* and *invalid* transaction lists.
-    """
     valid: List[Transaction] = []
     invalid: List[InvalidTransaction] = []
 
@@ -55,7 +23,7 @@ def validate_transactions(
     for txn in transactions:
         date_str = format_timestamp(txn.date)
 
-        # Rule 1 – date format (sanity check; already parsed but guard serialise round-trip)
+        # Rule 1 – date format --sanity check; already parsed but guard serialise round-trip
         if not is_valid_timestamp(date_str):
             invalid.append(
                 InvalidTransaction(

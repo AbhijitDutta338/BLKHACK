@@ -1,10 +1,3 @@
-"""
-Transaction builder service.
-
-Responsibility: enrich raw expense data with *ceiling* and *remanent*
-and aggregate totals.  Pure business logic – no I/O.
-"""
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -21,33 +14,7 @@ from app.utils.time_utils import parse_timestamp
 
 
 def build_transactions(expenses: List[RawExpense]) -> ParseResult:
-    """
-    Convert a list of raw expenses into enriched transactions.
-
-    For each expense:
-    * ``ceiling``  = smallest multiple of 100 >= amount
-    * ``remanent`` = ceiling - amount
-
-    Also returns aggregate totals:
-    * ``totalExpense``
-    * ``totalCeiling``
-    * ``totalRemanent``
-
-    Parameters
-    ----------
-    expenses:
-        Validated raw expense records (timestamp + amount).
-
-    Returns
-    -------
-    ParseResult
-        Enriched transactions and aggregate totals.
-
-    Raises
-    ------
-    ValueError
-        If any timestamp cannot be parsed.
-    """
+    
     transactions: List[Transaction] = []
     total_expense = ZERO
     total_ceiling = ZERO

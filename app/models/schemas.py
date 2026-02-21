@@ -1,10 +1,3 @@
-"""
-Immutable data models / schemas for the BlackRock challenge API.
-
-These dataclasses serve as typed containers that travel between
-the route → service → model layers.  No business logic lives here.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,17 +9,14 @@ from typing import List, Optional
 #Raw input atoms
 @dataclass(frozen=True)
 class RawExpense:
-    """Single raw expense row as received from the client."""
+
     timestamp: str
     amount: Decimal
 
 
 @dataclass(frozen=True)
 class RawTransaction:
-    """
-    An enriched transaction (ceiling + remanent already computed).
-    Used as input to validator and temporal filter endpoints.
-    """
+    
     date: str
     amount: Decimal
     ceiling: Decimal
@@ -36,7 +26,7 @@ class RawTransaction:
 #Enriched transaction (output of builder) 
 @dataclass(frozen=True)
 class Transaction:
-    """Fully enriched transaction with ceiling and remanent."""
+    
     date: datetime
     amount: Decimal
     ceiling: Decimal
@@ -56,7 +46,7 @@ class Transaction:
 #Parser output 
 @dataclass(frozen=True)
 class ParseResult:
-    """Output of the transaction builder service."""
+    
     transactions: List[Transaction]
     total_expense: Decimal
     total_ceiling: Decimal
@@ -70,7 +60,7 @@ class ParseResult:
 #Validation output 
 @dataclass(frozen=True)
 class InvalidTransaction:
-    """A transaction that failed one or more validation rules."""
+    
     transaction: Transaction
     message: str
 
@@ -82,7 +72,7 @@ class InvalidTransaction:
 
 @dataclass(frozen=True)
 class ValidationResult:
-    """Output of the transaction validator service."""
+    
     valid: List[Transaction]
     invalid: List[InvalidTransaction]
 
@@ -96,7 +86,7 @@ class ValidationResult:
 #Temporal rule definitions 
 @dataclass(frozen=True)
 class QRule:
-    """Replace *remanent* with *fixed* for transactions in [start, end]."""
+    
     fixed: Decimal
     start: datetime
     end: datetime
@@ -104,7 +94,7 @@ class QRule:
 
 @dataclass(frozen=True)
 class PRule:
-    """Add *extra* to *remanent* for transactions in [start, end]."""
+    
     extra: Decimal
     start: datetime
     end: datetime
@@ -112,7 +102,7 @@ class PRule:
 
 @dataclass(frozen=True)
 class KRange:
-    """Validity window; transaction must fall in at least one K range."""
+    
     start: datetime
     end: datetime
     raw_start: str = ""
@@ -122,7 +112,7 @@ class KRange:
 #Temporal filter output
 @dataclass(frozen=True)
 class TemporalResult:
-    """Output of the temporal constraints filter service (pre-built transactions)."""
+    
     valid: List[Transaction]
     invalid: List[InvalidTransaction]
 
@@ -135,10 +125,7 @@ class TemporalResult:
 
 @dataclass(frozen=True)
 class FilteredTransaction:
-    """
-    Valid transaction produced by the raw-input temporal filter.
-    Includes ``inKPeriod`` flag and fully computed ceiling/remanent.
-    """
+    
     date: datetime
     amount: Decimal
     ceiling: Decimal
@@ -159,10 +146,7 @@ class FilteredTransaction:
 
 @dataclass(frozen=True)
 class InvalidFilteredTransaction:
-    """
-    A transaction rejected during raw-input temporal filtering.
-    Only carries date, amount and a human-readable message.
-    """
+    
     date: datetime
     amount: Decimal
     message: str
@@ -179,9 +163,7 @@ class InvalidFilteredTransaction:
 
 @dataclass(frozen=True)
 class FilterResult:
-    """
-    Output of the raw-input temporal filter pipeline.
-    """
+    
     valid: List[FilteredTransaction]
     invalid: List[InvalidFilteredTransaction]
 
@@ -195,12 +177,7 @@ class FilterResult:
 #Returns output schemas
 @dataclass(frozen=True)
 class SavingsByDate:
-    """
-    Compounded return figure for one K period.
-
-    ``start`` and ``end`` are stored as the **original input strings** so that
-    calendar oddities like ``"2023-11-31"`` are echoed back verbatim.
-    """
+    
     start: str
     end: str
     amount: Decimal
@@ -220,7 +197,7 @@ class SavingsByDate:
 
 @dataclass(frozen=True)
 class ReturnsResult:
-    """Output of both NPS and Index returns services."""
+    
     total_transaction_amount: Decimal
     total_ceiling: Decimal
     savings_by_dates: List[SavingsByDate]

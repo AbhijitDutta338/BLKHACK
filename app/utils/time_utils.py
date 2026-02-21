@@ -15,19 +15,6 @@ TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def parse_timestamp(raw: str) -> datetime:
-    """
-    Parse a timestamp string into a :class:`~datetime.datetime`.
-
-    Parameters
-    ----------
-    raw:
-        A string conforming to ``"YYYY-MM-DD HH:mm:ss"``.
-
-    Raises
-    ------
-    ValueError
-        If *raw* does not match the expected format.
-    """
     try:
         return datetime.strptime(raw, TIMESTAMP_FORMAT)
     except (ValueError, TypeError) as exc:
@@ -37,23 +24,6 @@ def parse_timestamp(raw: str) -> datetime:
 
 
 def parse_timestamp_lenient(raw: str) -> datetime:
-    """
-    Like :func:`parse_timestamp` but silently clamps overflow days to the
-    last valid day of the month.
-
-    This allows inputs such as ``"2023-11-31 23:59:59"`` (November only has 30
-    days) to be accepted; the value is treated as ``"2023-11-30 23:59:59"``.
-
-    Parameters
-    ----------
-    raw:
-        A timestamp string, possibly with an overflowed day component.
-
-    Raises
-    ------
-    ValueError
-        If *raw* cannot be parsed even after day-clamping.
-    """
     # Fast path – valid date
     try:
         return datetime.strptime(raw, TIMESTAMP_FORMAT)
@@ -76,12 +46,10 @@ def parse_timestamp_lenient(raw: str) -> datetime:
 
 
 def format_timestamp(dt: datetime) -> str:
-    """Serialise a :class:`~datetime.datetime` to ``"YYYY-MM-DD HH:mm:ss"``."""
     return dt.strftime(TIMESTAMP_FORMAT)
 
 
 def is_valid_timestamp(raw: str) -> bool:
-    """Return ``True`` when *raw* is a well-formed timestamp string."""
     try:
         parse_timestamp(raw)
         return True
@@ -90,14 +58,10 @@ def is_valid_timestamp(raw: str) -> bool:
 
 
 def is_within_range(dt: datetime, start: datetime, end: datetime) -> bool:
-    """
-    Return ``True`` when *dt* falls inside [*start*, *end*] (inclusive).
-    """
     return start <= dt <= end
 
 
 def parse_optional_timestamp(raw: Optional[str]) -> Optional[datetime]:
-    """Return ``None`` if *raw* is ``None``; otherwise delegate to :func:`parse_timestamp`."""
     if raw is None:
         return None
     return parse_timestamp(raw)
