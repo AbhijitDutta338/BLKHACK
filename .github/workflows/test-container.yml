@@ -1,0 +1,43 @@
+name: Test Container Runtime
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: abhijitdutta338
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker Image
+        run: |
+          docker pull ghcr.io/abhijitdutta338/blk-hacking-ind-abhijit-dutta:latest
+
+      - name: Run Container
+        run: |
+          docker run -d -p 5477:5477 --name test-container \
+          ghcr.io/abhijitdutta338/blk-hacking-ind-abhijit-dutta:latest
+
+      - name: Wait for Application Startup
+        run: sleep 8
+
+      - name: Check Running Containers
+        run: docker ps
+
+      - name: Test Endpoint
+        run: |
+          curl -i http://localhost:5477/blackrock/challenge/v1/performance
+
+      - name: Show Container Logs (if failure)
+        if: failure()
+        run: docker logs test-container
