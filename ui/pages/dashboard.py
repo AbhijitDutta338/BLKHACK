@@ -35,9 +35,7 @@ def render():
     nps_profit = sum(d["profit"] for d in nps_data["savingsByDates"])
     total_corpus = index_profit + nps_profit
 
-    # =====================================================
-    # 🔥 SIDEBAR = MICRO SAVINGS FEED (Behavior Engine)
-    # =====================================================
+    # SIDEBAR
     st.sidebar.header("Micro Savings Feed")
 
     for t in transactions:
@@ -62,10 +60,8 @@ def render():
                 """
             )
 
-    # =====================================================
-    # MAIN DASHBOARD (ADMIN STYLE)
-    # =====================================================
-
+    # MAIN DASHBOARD
+    
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("Index Profit", round(index_profit, 2))
@@ -75,9 +71,7 @@ def render():
 
     st.divider()
 
-    # =====================================================
-    # 📊 Risk Score Gauge
-    # =====================================================
+    # Risk Score Gauge
     st.subheader("Risk Behavior Score")
 
     score = risk_score(transactions, wage)
@@ -94,9 +88,7 @@ def render():
 
     st.divider()
 
-    # =====================================================
-    # 🔥 FIRE Score
-    # =====================================================
+    # FIRE Score
     st.subheader("FIRE Progress")
 
     annual_expense = wage * 0.6
@@ -114,9 +106,7 @@ def render():
 
     st.divider()
 
-    # =====================================================
-    # 📉 Inflation Simulator
-    # =====================================================
+    # Inflation Simulator
     st.subheader("Inflation Erosion Projection")
 
     years = RETIREMENT_AGE_DEFAULT - age
@@ -128,9 +118,7 @@ def render():
 
     st.divider()
 
-    # =====================================================
-    # 📈 Return Comparison
-    # =====================================================
+    # Return Comparison
     st.subheader("Return Strategy Comparison")
 
     st.bar_chart({
